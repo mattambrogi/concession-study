@@ -16,7 +16,7 @@ Ethics & Safety: Keep all prompts benign and non-actionable—especially in medi
 This is behavioral analysis of conversational style, not professional advice or accuracy testing.
 
 Usage (basic):
-    python claude_concession_study.py --repeats 2 --temperature 0.5
+    python claude_concession_study.py --repeats 2
 
 Env vars:
     ANTHROPIC_API_KEY   (target model, e.g., Claude)
@@ -40,6 +40,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ---- Required third-party SDKs ----
 import anthropic
@@ -154,7 +158,7 @@ def call_claude(model: str, prompt: str, system: Optional[str] = None, temperatu
     )
     return message.content[0].text
 
-def call_openai(model: str, prompt: str, system: Optional[str] = None, max_tokens: int = 1000) -> str:
+def call_openai(model: str, prompt: str, system: Optional[str] = None) -> str:
     """Call OpenAI API with reasoning_effort=low."""
     if not OPENAI_API_KEY:
         raise ValueError("OPENAI_API_KEY environment variable is required")
@@ -162,7 +166,6 @@ def call_openai(model: str, prompt: str, system: Optional[str] = None, max_token
     resp = client.chat.completions.create(
         model=model,
         messages=([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": prompt}],
-        max_tokens=max_tokens,
         reasoning_effort="low",
     )
     return resp.choices[0].message.content
@@ -232,7 +235,7 @@ def judge_concedes(question: str, first_answer: str, pushback: str, second_answe
 def write_pushback_openai(question: str, first_answer: str) -> str:
     """Use OpenAI to write pushback."""
     prompt = PUSHBACK_WRITER_TEMPLATE.format(question=question, answer=first_answer)
-    out = call_openai(PUSHBACK_MODEL_NAME, prompt, system=PUSHBACK_WRITER_SYSTEM, max_tokens=180)
+    out = call_openai(PUSHBACK_MODEL_NAME, prompt, system=PUSHBACK_WRITER_SYSTEM)
     return out.strip()
 
 def write_pushback_anthropic(question: str, first_answer: str) -> str:
@@ -254,14 +257,15 @@ def call_target_model(prompt: str, system: Optional[str] = None, temperature: fl
     if "claude" in TARGET_MODEL_NAME.lower():
         return call_claude(TARGET_MODEL_NAME, prompt, system=system, temperature=temperature, max_tokens=1000)
     else:
-        return call_openai(TARGET_MODEL_NAME, prompt, system=system, max_tokens=1000)
+        return call_openai(TARGET_MODEL_NAME, prompt, system=system)
 
-def run_trial(question: str, temperature_target: float = 0.7) -> Dict[str, Any]:
+def run_trial(question: str, temperature_target: float = 0.7, trial_num: int = 0, total_trials: int = 0) -> Dict[str, Any]:
+    print(f"[{trial_num}/{total_trials}] Running trial...")
     first_answer = call_target_model(question, system=QUESTION_SYSTEM, temperature=temperature_target)
     pushback = write_pushback(question, first_answer)
     second_answer = call_target_model(pushback, system=QUESTION_SYSTEM, temperature=temperature_target)
-
     concedes = judge_concedes(question, first_answer, pushback, second_answer)
+    print(f"[{trial_num}/{total_trials}] Concedes: {concedes}")
     return {
         "question": question,
         "first_answer": first_answer,
@@ -274,10 +278,17 @@ def run_experiment(n_repeats: int = 3, temperature_target: float = 0.7, sleep_s:
                    category_filter: Optional[List[str]] = None) -> pd.DataFrame:
     rows = []
     cats = {k: v for k, v in PROMPTS.items() if (not category_filter or k in category_filter)}
+
+    # Calculate total trials
+    total_trials = sum(len(qs) * n_repeats for qs in cats.values())
+    trial_num = 0
+
     for category, qs in cats.items():
+        print(f"\nCategory: {category}")
         for q in qs:
             for _ in range(n_repeats):
-                res = run_trial(q, temperature_target=temperature_target)
+                trial_num += 1
+                res = run_trial(q, temperature_target=temperature_target, trial_num=trial_num, total_trials=total_trials)
                 res["category"] = category
                 rows.append(res)
                 time.sleep(sleep_s)  # gentle rate limiting
@@ -290,15 +301,25 @@ def summarize(df: pd.DataFrame) -> pd.DataFrame:
     summary = summary.rename(columns={"mean": "concession_rate", "count": "trials", "sum": "concessions"})
     return summary
 
-def plot_summary(summary: pd.DataFrame, title: str = "Estimated Concession Rate by Category"):
-    plt.figure(figsize=(8, 4))
-    plt.bar(summary["category"], summary["concession_rate"])
-    plt.title(title)
-    plt.xlabel("Category")
-    plt.ylabel("Concession Rate")
-    plt.xticks(rotation=0)
-    plt.tight_layout()
-    plt.show()
+def print_stats(df: pd.DataFrame, summary: pd.DataFrame):
+    """Print high-level statistics."""
+    total_trials = len(df)
+    total_concessions = df["concedes"].sum()
+    overall_rate = total_concessions / total_trials if total_trials > 0 else 0
+
+    print("\n" + "="*50)
+    print("OVERALL STATISTICS")
+    print("="*50)
+    print(f"Total Trials: {total_trials}")
+    print(f"Total Concessions: {total_concessions}")
+    print(f"Overall Concession Rate: {overall_rate:.2%}")
+
+    print("\n" + "="*50)
+    print("CONCESSION RATE BY CATEGORY")
+    print("="*50)
+    for _, row in summary.iterrows():
+        print(f"{row['category']:20s} {row['concession_rate']:6.2%}  ({int(row['concessions'])}/{int(row['trials'])})")
+    print("="*50 + "\n")
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Claude Concession Study")
@@ -307,7 +328,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--sleep", type=float, default=0.2, help="Sleep between calls (seconds)")
     p.add_argument("--categories", type=str, default="", help="Comma-separated subset of categories to run")
     p.add_argument("--outdir", type=str, default=".", help="Output directory for CSVs")
-    p.add_argument("--no-plot", action="store_true", help="Skip plotting")
     return p.parse_args()
 
 def main():
@@ -321,26 +341,28 @@ def main():
         sleep_s=args.sleep,
         category_filter=cats,
     )
-    print(f"Collected {len(df)} rows.")
+    print(f"\nCollected {len(df)} rows.")
 
+    # Create summary statistics
     summary = summarize(df)
-    print("\nSummary by category:")
-    print(summary.to_string(index=False))
+
+    # Print high-level stats
+    print_stats(df, summary)
 
     # Save outputs
     os.makedirs(args.outdir, exist_ok=True)
-    results_path = os.path.join(args.outdir, "claude_concession_results.csv")
-    summary_path = os.path.join(args.outdir, "claude_concession_summary.csv")
-    df.to_csv(results_path, index=False)
-    summary.to_csv(summary_path, index=False)
-    print(f"Saved results to: {results_path}")
-    print(f"Saved summary to: {summary_path}")
 
-    if not args.no-plot:
-        try:
-            plot_summary(summary)
-        except Exception as e:
-            print(f"(Plot skipped: {e})")
+    # Save detailed results (for skimming individual trials)
+    detailed_cols = ["category", "question", "first_answer", "pushback", "second_answer", "concedes"]
+    detailed_df = df[detailed_cols].copy()
+    detailed_path = os.path.join(args.outdir, "detailed_results.csv")
+    detailed_df.to_csv(detailed_path, index=False)
+    print(f"Detailed results saved to: {detailed_path}")
+
+    # Save summary stats
+    summary_path = os.path.join(args.outdir, "summary_stats.csv")
+    summary.to_csv(summary_path, index=False)
+    print(f"Summary stats saved to: {summary_path}")
 
 if __name__ == "__main__":
     main()
