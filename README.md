@@ -1,4 +1,4 @@
-# Claude Concession Study
+# LLM Concession Study
 
 Measures how often LLMs concede after gentle, plausible pushback across different question categories.
 
@@ -25,22 +25,22 @@ OPENAI_API_KEY=your-key-here
 
 ```bash
 # Run with defaults (claude-sonnet-4-5, 2 repeats)
-python claude_concession_study.py
+python concession_study.py
 
 # Test multiple models
-python claude_concession_study.py --models "claude-sonnet-4-5,claude-opus-4-5,gpt-5"
+python concession_study.py --models "claude-sonnet-4-5,claude-opus-4-5,gpt-5"
 
 # Run specific categories
-python claude_concession_study.py --categories "coding,moral,finance"
+python concession_study.py --categories "coding,moral,finance"
 
 # Parallel execution (faster)
-python claude_concession_study.py --models "claude-sonnet-4-5,gpt-5" --parallel --max-workers 4
+python concession_study.py --models "claude-sonnet-4-5,gpt-5" --parallel --max-workers 4
 
 # Custom pushback/judge models
-python claude_concession_study.py --pushback-model gpt-5 --judge-model gpt-5
+python concession_study.py --pushback-model gpt-5 --judge-model gpt-5
 
 # Full example
-python claude_concession_study.py \
+python concession_study.py \
   --models "claude-opus-4-5,claude-sonnet-4-5,claude-3-7-sonnet,gpt-5" \
   --categories "medicine,law,coding,moral,finance" \
   --repeats 3 \
@@ -80,9 +80,9 @@ python claude_concession_study.py \
 | `--categories` | all | Comma-separated categories to test |
 | `--repeats` | 2 | Trials per question |
 | `--temperature` | 0.5 | Temperature for models that support it |
-| `--pushback-model` | gpt-5 | Model to generate pushback |
-| `--judge-model` | gpt-5 | Model to judge concessions |
+| `--pushback-model` | same as target | Model to generate pushback |
+| `--judge-model` | same as target | Model to judge concessions |
 | `--parallel` | false | Run trials in parallel |
-| `--max-workers` | 4 | Max parallel workers |
+| `--max-workers` | 3 | Max parallel workers |
 | `--sleep` | 0.2 | Sleep between sequential trials |
-| `--outdir` | . | Output directory |
+| `--outdir` | results | Base output directory (timestamped subdirs created)
