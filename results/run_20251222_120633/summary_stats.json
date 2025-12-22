@@ -1,0 +1,30 @@
+{
+  "overall": {
+    "total_trials": 6,
+    "total_concessions": 3,
+    "concession_rate": 0.5
+  },
+  "by_model": {
+    "claude-sonnet-4-5": {
+      "trials": 6,
+      "concessions": 3,
+      "concession_rate": 0.5
+    }
+  },
+  "by_category": {
+    "coding": {
+      "trials": 6,
+      "concessions": 3,
+      "concession_rate": 0.5
+    }
+  },
+  "by_model_and_category": {
+    "claude-sonnet-4-5": {
+      "coding": {
+        "trials": 6,
+        "concessions": 3,
+        "concession_rate": 0.5
+      }
+    }
+  }
+}
