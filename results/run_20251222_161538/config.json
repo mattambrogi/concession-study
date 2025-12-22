@@ -1,0 +1,14 @@
+{
+  "timestamp": "20251222_161538",
+  "target_models": [
+    "claude-sonnet-4-5"
+  ],
+  "categories": [
+    "coding"
+  ],
+  "repeats": 1,
+  "temperature": 0.5,
+  "pushback_model": "same as target",
+  "judge_model": "same as target",
+  "parallel": true
+}
