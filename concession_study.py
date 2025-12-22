@@ -129,81 +129,73 @@ def get_model_config(model_name: str) -> ModelConfig:
 
 
 @retry_with_backoff
-def call_anthropic(
+def _call_anthropic(
     model_id: str,
-    prompt: str,
+    messages: List[Dict[str, str]],
     system: Optional[str] = None,
     temperature: Optional[float] = None,
-    max_tokens: int = 1000,
 ) -> str:
-    """Call Anthropic Claude API with retry on rate limits."""
-    if not ANTHROPIC_API_KEY:
-        raise ValueError("ANTHROPIC_API_KEY is required")
-
+    """Call Anthropic Claude API."""
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     kwargs = {
         "model": model_id,
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 1000,
+        "messages": messages,
     }
     if system:
         kwargs["system"] = system
     if temperature is not None:
         kwargs["temperature"] = temperature
-
-    message = client.messages.create(**kwargs)
-    return message.content[0].text
+    response = client.messages.create(**kwargs)
+    return response.content[0].text
 
 
 @retry_with_backoff
-def call_openai(
+def _call_openai(
     model_id: str,
-    prompt: str,
+    messages: List[Dict[str, str]],
     system: Optional[str] = None,
     temperature: Optional[float] = None,
-    max_tokens: int = 1000,
 ) -> str:
-    """Call OpenAI API with retry on rate limits. Note: GPT-5 doesn't support temperature."""
-    if not OPENAI_API_KEY:
-        raise ValueError("OPENAI_API_KEY is required")
-
+    """Call OpenAI API."""
     client = OpenAI(api_key=OPENAI_API_KEY)
-    messages = []
+    msgs = []
     if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
-
+        msgs.append({"role": "system", "content": system})
+    msgs.extend(messages)
     kwargs = {
         "model": model_id,
-        "messages": messages,
+        "messages": msgs,
     }
-    # GPT-5 and reasoning models use reasoning_effort instead of temperature
     if "gpt-5" in model_id.lower() or model_id.startswith("o"):
         kwargs["reasoning_effort"] = "low"
     elif temperature is not None:
         kwargs["temperature"] = temperature
-
-    resp = client.chat.completions.create(**kwargs)
-    return resp.choices[0].message.content
+    response = client.chat.completions.create(**kwargs)
+    return response.choices[0].message.content
 
 
 def call_model(
     model_name: str,
-    prompt: str,
+    messages: Any,  # str for single-turn, List[Dict] for multi-turn
     system: Optional[str] = None,
     temperature: Optional[float] = None,
-    max_tokens: int = 1000,
 ) -> str:
-    """Unified model calling function."""
-    config = get_model_config(model_name)
+    """Unified model calling function.
 
-    # Only pass temperature if the model supports it
+    Args:
+        messages: Either a string (single user message) or list of message dicts
+    """
+    if isinstance(messages, str):
+        messages = [{"role": "user", "content": messages}]
+
+    config = get_model_config(model_name)
     temp = temperature if config.supports_temperature else None
 
     if config.provider == "anthropic":
-        return call_anthropic(config.model_id, prompt, system, temp, max_tokens)
+        return _call_anthropic(config.model_id, messages, system, temp)
     else:
-        return call_openai(config.model_id, prompt, system, temp, max_tokens)
+        return _call_openai(config.model_id, messages, system, temp)
 
 
 def write_pushback(question: str, first_answer: str, pushback_model: str) -> str:
@@ -214,7 +206,6 @@ def write_pushback(question: str, first_answer: str, pushback_model: str) -> str
         prompt,
         system=PUSHBACK_WRITER_SYSTEM,
         temperature=0.3,
-        max_tokens=200,
     )
     return response.strip()
 
@@ -267,7 +258,7 @@ def _call_anthropic_judge(model_id: str, system: str, prompt: str) -> bool:
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     response = client.beta.messages.parse(
         model=model_id,
-        max_tokens=256,
+        max_tokens=1000,
         betas=["structured-outputs-2025-11-13"],
         system=system,
         messages=[{"role": "user", "content": prompt}],
@@ -325,7 +316,7 @@ def run_trial(
     temperature: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Run a single trial: question -> pushback -> response -> judgment."""
-    # Get first answer
+    # Step 1: Get first answer
     first_answer = call_model(
         target_model,
         question,
@@ -333,18 +324,24 @@ def run_trial(
         temperature=temperature,
     )
 
-    # Generate pushback
+    # Step 2: Generate pushback
     pushback = write_pushback(question, first_answer, pushback_model)
 
-    # Get second answer (response to pushback)
+    # Step 3: Get second answer with full conversation context
+    # Model sees: user question -> its first answer -> user pushback
+    conversation = [
+        {"role": "user", "content": question},
+        {"role": "assistant", "content": first_answer},
+        {"role": "user", "content": pushback},
+    ]
     second_answer = call_model(
         target_model,
-        pushback,
+        conversation,
         system=QUESTION_SYSTEM,
         temperature=temperature,
     )
 
-    # Judge concession
+    # Step 4: Judge concession
     concedes = judge_concedes(
         question, first_answer, pushback, second_answer, judge_model
     )
