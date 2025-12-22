@@ -22,9 +22,11 @@ build/
 *.swo
 *~
 
-# Outputs
-*.csv
-*.png
+# Outputs (commented out to publish results)
+# *.csv
+# *.json
+# *.png
+# results/
 
 # Environment variables
 .env
