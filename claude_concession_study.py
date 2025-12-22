@@ -24,6 +24,7 @@ import json
 import time
 import random
 import argparse
+from datetime import datetime
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from functools import wraps
@@ -260,6 +261,21 @@ def judge_concedes_openai(
         return None
 
 
+@retry_with_backoff
+def _call_anthropic_judge(model_id: str, system: str, prompt: str) -> bool:
+    """Internal function to call Anthropic judge with structured output and retry."""
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    response = client.beta.messages.parse(
+        model=model_id,
+        max_tokens=256,
+        betas=["structured-outputs-2025-11-13"],
+        system=system,
+        messages=[{"role": "user", "content": prompt}],
+        output_format=ConcessionJudgment,
+    )
+    return response.parsed_output.concedes
+
+
 def judge_concedes_anthropic(
     question: str,
     first_answer: str,
@@ -267,7 +283,8 @@ def judge_concedes_anthropic(
     second_answer: str,
     judge_model: str,
 ) -> Optional[bool]:
-    """Judge concession using Anthropic with boolean output."""
+    """Judge concession using Anthropic with structured output."""
+    config = get_model_config(judge_model)
     prompt = JUDGE_TEMPLATE.format(
         question=question,
         first_answer=first_answer,
@@ -275,19 +292,7 @@ def judge_concedes_anthropic(
         second_answer=second_answer,
     )
     try:
-        response = call_model(
-            judge_model,
-            prompt,
-            system=JUDGE_SYSTEM_ANTHROPIC,
-            temperature=0.0,
-            max_tokens=10,
-        )
-        response = response.strip().lower()
-        if "true" in response:
-            return True
-        elif "false" in response:
-            return False
-        return None
+        return _call_anthropic_judge(config.model_id, JUDGE_SYSTEM_OPENAI, prompt)
     except Exception as e:
         print(f"Judge error: {e}")
         return None
@@ -663,8 +668,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--outdir",
         type=str,
-        default=".",
-        help="Output directory (default: current directory)",
+        default="results",
+        help="Base output directory (default: results)",
     )
     return parser.parse_args()
 
@@ -719,8 +724,25 @@ def main():
     summary = compute_summary(results)
     print_summary(summary)
 
-    # Save outputs
-    os.makedirs(args.outdir, exist_ok=True)
+    # Create timestamped output directory
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = os.path.join(args.outdir, f"run_{timestamp}")
+    os.makedirs(run_dir, exist_ok=True)
+
+    # Save run config
+    config = {
+        "timestamp": timestamp,
+        "target_models": target_models,
+        "categories": categories or list(PROMPTS.keys()),
+        "repeats": args.repeats,
+        "temperature": args.temperature,
+        "pushback_model": args.pushback_model or "same as target",
+        "judge_model": args.judge_model or "same as target",
+        "parallel": args.parallel,
+    }
+    config_path = os.path.join(run_dir, "config.json")
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
 
     # Save detailed results
     df = pd.DataFrame(results)
@@ -729,19 +751,21 @@ def main():
         "pushback", "second_answer", "concedes", "repeat",
         "pushback_model", "judge_model",
     ]
-    detailed_path = os.path.join(args.outdir, "detailed_results.csv")
+    detailed_path = os.path.join(run_dir, "detailed_results.csv")
     df[detailed_cols].to_csv(detailed_path, index=False)
     print(f"Detailed results saved to: {detailed_path}")
 
     # Save summary as JSON
-    summary_path = os.path.join(args.outdir, "summary_stats.json")
+    summary_path = os.path.join(run_dir, "summary_stats.json")
     with open(summary_path, "w") as f:
         json.dump(summary, f, indent=2)
     print(f"Summary stats saved to: {summary_path}")
 
     # Generate detailed trial log
-    log_path = generate_trial_log(results, args.outdir)
+    log_path = generate_trial_log(results, run_dir)
     print(f"Trial log saved to: {log_path}")
+
+    print(f"\nAll outputs saved to: {run_dir}")
 
 
 if __name__ == "__main__":
