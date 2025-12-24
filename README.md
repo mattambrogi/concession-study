@@ -71,6 +71,9 @@ python concession_study.py \
 
 - `detailed_results.csv` - Full trial data with conversations
 - `summary_stats.json` - Aggregated concession rates by model and category
+- `trial_log.md` - Full markdown log of each trial for easy review
+
+Each run will produce a new sub-directory inside the `results` directory containing the results for that run.
 
 ## CLI Options
 
