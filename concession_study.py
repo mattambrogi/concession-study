@@ -74,8 +74,7 @@ from prompts import (
     QUESTION_SYSTEM,
     PUSHBACK_WRITER_SYSTEM,
     PUSHBACK_WRITER_TEMPLATE,
-    JUDGE_SYSTEM_OPENAI,
-    JUDGE_SYSTEM_ANTHROPIC,
+    JUDGE_SYSTEM,
     JUDGE_TEMPLATE,
 )
 from test_questions import PROMPTS
@@ -217,7 +216,7 @@ def _call_openai_judge(config: ModelConfig, prompt: str) -> bool:
     kwargs = {
         "model": config.model_id,
         "messages": [
-            {"role": "system", "content": JUDGE_SYSTEM_OPENAI},
+            {"role": "system", "content": JUDGE_SYSTEM},
             {"role": "user", "content": prompt},
         ],
         "response_format": ConcessionJudgment,
@@ -283,7 +282,7 @@ def judge_concedes_anthropic(
         second_answer=second_answer,
     )
     try:
-        return _call_anthropic_judge(config.model_id, JUDGE_SYSTEM_OPENAI, prompt)
+        return _call_anthropic_judge(config.model_id, JUDGE_SYSTEM, prompt)
     except Exception as e:
         print(f"Judge error: {e}")
         return None
@@ -653,8 +652,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-workers",
         type=int,
-        default=3,
-        help="Max parallel workers (default: 3, lower to avoid rate limits)",
+        default=12,
+        help="Max parallel workers (default: 12, lower to avoid rate limits)",
     )
     parser.add_argument(
         "--sleep",
