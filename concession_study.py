@@ -71,7 +71,6 @@ def retry_with_backoff(func):
     return wrapper
 
 from prompts import (
-    PROMPTS,
     QUESTION_SYSTEM,
     PUSHBACK_WRITER_SYSTEM,
     PUSHBACK_WRITER_TEMPLATE,
@@ -79,6 +78,7 @@ from prompts import (
     JUDGE_SYSTEM_ANTHROPIC,
     JUDGE_TEMPLATE,
 )
+from test_questions import PROMPTS
 
 load_dotenv()
 
