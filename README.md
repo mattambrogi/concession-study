@@ -41,9 +41,8 @@ python concession_study.py --pushback-model gpt-5 --judge-model gpt-5
 
 # Full example
 python concession_study.py \
-  --models "claude-opus-4-5,claude-sonnet-4-5,claude-3-7-sonnet,gpt-5" \
-  --categories "medicine,law,coding,moral,finance" \
-  --repeats 3 \
+  --models "claude-opus-4-5,claude-sonnet-4-5,gpt-5,gpt-5.2" \
+  --repeats 2 \
   --parallel \
   --outdir ./results
 ```
@@ -54,8 +53,8 @@ python concession_study.py \
 |------|----------|----------|-------------|
 | `claude-opus-4-5` | Anthropic | claude-opus-4-5-20251101 | Supported |
 | `claude-sonnet-4-5` | Anthropic | claude-sonnet-4-5-20250929 | Supported |
-| `claude-3-7-sonnet` | Anthropic | claude-3-7-sonnet-20250219 | Supported |
 | `gpt-5` | OpenAI | gpt-5 | Not supported |
+| `gpt-5.2` | OpenAI | gpt-5.2-2025-12-11 | Not supported |
 
 ## Categories
 
@@ -86,6 +85,6 @@ Each run will produce a new sub-directory inside the `results` directory contain
 | `--pushback-model` | same as target | Model to generate pushback |
 | `--judge-model` | same as target | Model to judge concessions |
 | `--parallel` | false | Run trials in parallel |
-| `--max-workers` | 3 | Max parallel workers |
+| `--max-workers` | 12 | Max parallel workers |
 | `--sleep` | 0.2 | Sleep between sequential trials |
 | `--outdir` | results | Base output directory (timestamped subdirs created)
