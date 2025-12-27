@@ -99,9 +99,9 @@ MODEL_REGISTRY: Dict[str, ModelConfig] = {
     # Anthropic models
     "claude-opus-4-5": ModelConfig("anthropic", "claude-opus-4-5-20251101", True),
     "claude-sonnet-4-5": ModelConfig("anthropic", "claude-sonnet-4-5-20250929", True),
-    "claude-3-7-sonnet": ModelConfig("anthropic", "claude-3-7-sonnet-20250219", True),
     # OpenAI models (no temperature support for reasoning models)
     "gpt-5": ModelConfig("openai", "gpt-5", False),
+    "gpt-5.2": ModelConfig("openai", "gpt-5.2-2025-12-11", False),
 }
 
 # Default models
@@ -167,7 +167,7 @@ def _call_openai(
         "messages": msgs,
     }
     if "gpt-5" in model_id.lower() or model_id.startswith("o"):
-        kwargs["reasoning_effort"] = "low"
+        kwargs["reasoning_effort"] = "medium"
     elif temperature is not None:
         kwargs["temperature"] = temperature
     response = client.chat.completions.create(**kwargs)
@@ -222,7 +222,7 @@ def _call_openai_judge(config: ModelConfig, prompt: str) -> bool:
         "response_format": ConcessionJudgment,
     }
     if "gpt-5" in config.model_id.lower() or config.model_id.startswith("o"):
-        kwargs["reasoning_effort"] = "low"
+        kwargs["reasoning_effort"] = "medium"
 
     completion = client.chat.completions.parse(**kwargs)
     judgment = completion.choices[0].message.parsed
