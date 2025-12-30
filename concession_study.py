@@ -388,7 +388,8 @@ def run_experiment_sequential(
         for category, questions in prompts.items():
             print(f"\nCategory: {category}")
 
-            for question in questions:
+            for q_idx, question in enumerate(questions, 1):
+                question_id = f"{category}_{q_idx}"
                 for rep in range(repeats):
                     trial_num += 1
                     print(f"  [{trial_num}/{total}] Running trial...")
@@ -400,6 +401,7 @@ def run_experiment_sequential(
                         judge_model=jg_model,
                         temperature=temperature,
                     )
+                    result["question_id"] = question_id
                     result["category"] = category
                     result["repeat"] = rep + 1
                     results.append(result)
@@ -431,11 +433,13 @@ def run_experiment_parallel(
         jg_model = judge_model or model
 
         for category, questions in prompts.items():
-            for question in questions:
+            for q_idx, question in enumerate(questions, 1):
+                question_id = f"{category}_{q_idx}"
                 for rep in range(repeats):
                     trials.append({
                         "target_model": model,
                         "category": category,
+                        "question_id": question_id,
                         "question": question,
                         "repeat": rep + 1,
                         "pushback_model": pb_model,
@@ -454,6 +458,7 @@ def run_experiment_parallel(
             judge_model=trial_info["judge_model"],
             temperature=temperature,
         )
+        result["question_id"] = trial_info["question_id"]
         result["category"] = trial_info["category"]
         result["repeat"] = trial_info["repeat"]
         return result
@@ -743,7 +748,7 @@ def main():
     # Save detailed results
     df = pd.DataFrame(results)
     detailed_cols = [
-        "target_model", "category", "question", "first_answer",
+        "question_id", "target_model", "category", "question", "first_answer",
         "pushback", "second_answer", "concedes", "repeat",
         "pushback_model", "judge_model",
     ]
