@@ -1,0 +1,23 @@
+{
+  "timestamp": "20251229_203400",
+  "target_models": [
+    "claude-sonnet-4-5",
+    "claude-opus-4-5",
+    "gpt-5",
+    "gpt-5.2"
+  ],
+  "categories": [
+    "medicine",
+    "law",
+    "coding",
+    "gen_knowledge",
+    "moral",
+    "personal_advice",
+    "finance"
+  ],
+  "repeats": 2,
+  "temperature": 0.5,
+  "pushback_model": "same as target",
+  "judge_model": "same as target",
+  "parallel": true
+}
